@@ -1,5 +1,6 @@
--- 掛貓簡易腳本 v1.1.14
+-- 掛貓簡易腳本 v1.2.0
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -16,6 +17,7 @@ local character, rootPart, humanoid = getCharacter()
 -- 控制變數
 local flyEnabled = false
 local hoverEnabled = false
+local lockEnabled = false
 local speed = 6
 local interval = 0.05
 local bodyVel = nil
@@ -46,7 +48,7 @@ local function removeESPFromCharacter(char)
     end
 end
 
--- 開啟 ESP (每1秒刷新一次)
+-- 開啟 ESP
 local function enableESP()
     espEnabled = true
     spawn(function()
@@ -70,6 +72,35 @@ local function disableESP()
     espObjects = {}
 end
 
+-- 找最近玩家
+local function getNearestPlayer()
+    local nearest, dist = nil, math.huge
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("Head") and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local mag = (plr.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+            if mag < dist then
+                dist = mag
+                nearest = plr
+            end
+        end
+    end
+    return nearest
+end
+
+-- 鎖頭功能
+local function lockOnNearestPlayer()
+    spawn(function()
+        while lockEnabled do
+            local target = getNearestPlayer()
+            if target and target.Character and target.Character:FindFirstChild("Head") then
+                local headPos = target.Character.Head.Position
+                camera.CFrame = CFrame.lookAt(camera.CFrame.Position, headPos)
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+end
+
 -- GUI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "掛貓Gui"
@@ -78,7 +109,7 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 -- 主介面
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 260)
+frame.Size = UDim2.new(0, 300, 0, 310)
 frame.AnchorPoint = Vector2.new(0.5, 0.5)
 frame.Position = UDim2.new(0.5, 0, 0.5, 0)
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -102,7 +133,7 @@ title.Size = UDim2.new(1, -60, 1, 0)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.GothamBold
-title.Text = "簡易腳本 v1.1.14"
+title.Text = "簡易腳本 v1.2.0"
 title.TextSize = 16
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
@@ -133,7 +164,7 @@ content.Size = UDim2.new(1, 0, 1, -30)
 content.Position = UDim2.new(0, 0, 0, 30)
 content.BackgroundTransparency = 1
 
--- 建立功能行
+-- 建立功能開關
 local function createToggle(parent, name, callback, order)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -20, 0, 40)
@@ -168,7 +199,7 @@ local function createToggle(parent, name, callback, order)
     end)
 end
 
--- 瞬移飛行
+-- 功能 1：朝視角瞬移
 local function flyLoop()
     while flyEnabled do
         if rootPart and humanoid and humanoid.MoveDirection.Magnitude > 0 and not hoverEnabled then
@@ -180,13 +211,12 @@ local function flyLoop()
     end
 end
 
--- 功能：朝視角瞬移
 createToggle(content, "朝視角瞬移", function(state)
     flyEnabled = state
     if flyEnabled then flyLoop() end
 end, 1)
 
--- 功能：空中懸停
+-- 功能 2：空中懸停
 createToggle(content, "空中懸停", function(state)
     hoverEnabled = state
     if hoverEnabled then
@@ -199,12 +229,18 @@ createToggle(content, "空中懸停", function(state)
     end
 end, 2)
 
--- 功能：玩家透視
+-- 功能 3：玩家透視
 createToggle(content, "玩家透視", function(state)
     if state then enableESP() else disableESP() end
 end, 3)
 
--- 🔹 最小化功能
+-- 功能 4：鎖定最近玩家頭部
+createToggle(content, "鎖定最近玩家頭部", function(state)
+    lockEnabled = state
+    if lockEnabled then lockOnNearestPlayer() end
+end, 4)
+
+-- 最小化介面
 local miniFrame = Instance.new("TextButton")
 miniFrame.Size = UDim2.new(0, 40, 0, 40)
 miniFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -228,7 +264,7 @@ miniFrame.MouseButton1Click:Connect(function()
     miniFrame.Visible = false
 end)
 
--- 🔹 關閉確認框
+-- 關閉確認框
 local confirmFrame = Instance.new("Frame", screenGui)
 confirmFrame.Size = UDim2.new(0, 200, 0, 120)
 confirmFrame.Position = UDim2.new(0.5, -100, 0.5, -60)
@@ -269,6 +305,7 @@ end)
 yesBtn.MouseButton1Click:Connect(function()
     flyEnabled = false
     hoverEnabled = false
+    lockEnabled = false
     espEnabled = false
     if bodyVel then bodyVel:Destroy() bodyVel = nil end
     disableESP()
