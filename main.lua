@@ -1,11 +1,11 @@
--- 簡易腳本 v1.2.2
+-- 簡易腳本v1.2.2
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
--- 初始化角色函式
+-- 初始化角色
 local function getCharacter()
     local char = player.Character or player.CharacterAdded:Wait()
     local root = char:WaitForChild("HumanoidRootPart")
@@ -24,12 +24,11 @@ local speed = 6
 local interval = 0.05
 local bodyVel = nil
 
--- ESP 管理表與連線儲存
+-- ESP 管理
 local espObjects = {}
-local espLoopTask = nil
 local espConnections = {}
 
---GUI
+-- GUI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "掛貓Gui"
 screenGui.ResetOnSpawn = false
@@ -95,7 +94,7 @@ miniFrame.Visible = false
 miniFrame.Parent = screenGui
 Instance.new("UICorner", miniFrame).CornerRadius = UDim.new(0, 12)
 
---拖動gui
+-- 拖動 GUI
 local function makeDraggable(guiA, guiB)
     local dragging = false
     local dragInput, startPos, startGuiPos
@@ -123,11 +122,10 @@ local function makeDraggable(guiA, guiB)
     guiB.InputBegan:Connect(onInputBegan)
     UserInputService.InputChanged:Connect(onInputChanged)
 end
-
 makeDraggable(frame, miniFrame)
 makeDraggable(titleBar, miniFrame)
 
---功能按鈕
+-- 創建切換按鈕
 local function createToggle(parent, name, callback, order)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -20, 0, 40)
@@ -160,7 +158,7 @@ local function createToggle(parent, name, callback, order)
     end)
 end
 
--- ---------- 飛行 / 懸停 ----------
+-- 飛行 / 懸停功能
 local function flyLoop()
     while flyEnabled do
         if rootPart and humanoid and humanoid.MoveDirection.Magnitude > 0 and not hoverEnabled then
@@ -185,7 +183,7 @@ local function hoverLoop()
     if bodyVel then bodyVel:Destroy() bodyVel = nil end
 end
 
--- ---------- ESP ----------
+-- ESP 功能
 local function addESPToCharacter(char)
     if not char or char == player.Character then return end
     if espObjects[char] and espObjects[char].Parent then return end
@@ -216,24 +214,12 @@ local function enableESP()
     end
     espConnections.playerAdded = Players.PlayerAdded:Connect(function(plr)
         espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-            if espEnabled then
-                task.wait(1)
-                addESPToCharacter(char)
-            end
+            task.wait(0.5)
+            if espEnabled then addESPToCharacter(char) end
         end)
     end)
     espConnections.playerRemoving = Players.PlayerRemoving:Connect(function(plr)
         if plr.Character then removeESPFromCharacter(plr.Character) end
-    end)
-    espLoopTask = spawn(function()
-        while espEnabled do
-            for _, plr in pairs(Players:GetPlayers()) do
-                if plr ~= player and plr.Character then
-                    addESPToCharacter(plr.Character)
-                end
-            end
-            task.wait(1)
-        end
     end)
 end
 
@@ -251,61 +237,53 @@ local function disableESP()
     espConnections = {}
 end
 
--- ---------- 鎖定最近玩家頭部 ----------
+-- 鎖定最近玩家頭部
+local lockConnection = nil
+local previousCameraType = nil
 local function getNearestPlayerHead()
     local bestDist = math.huge
     local bestHead = nil
-    local bestPlayer = nil
     local camPos = camera.CFrame.Position
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and plr.Character then
             local head = plr.Character:FindFirstChild("Head")
-            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local part = head or hrp
+            local part = head or plr.Character:FindFirstChild("HumanoidRootPart")
             if part then
                 local d = (part.Position - camPos).Magnitude
                 if d < bestDist then
                     bestDist = d
                     bestHead = part
-                    bestPlayer = plr
                 end
             end
         end
     end
-    return bestPlayer, bestHead
+    return bestHead
 end
-
-local lockConnection = nil
-local previousCameraType = nil
 
 local function startLockHead()
     if lockHeadEnabled then return end
     lockHeadEnabled = true
     previousCameraType = camera.CameraType
-    local p, head = getNearestPlayerHead()
-    if head then
-        camera.CameraType = Enum.CameraType.Scriptable
-        camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
-    end
+    camera.CameraType = Enum.CameraType.Scriptable
     lockConnection = RunService.RenderStepped:Connect(function()
         if not lockHeadEnabled then return end
-        local _, head2 = getNearestPlayerHead()
-        if head2 then
-            camera.CFrame = CFrame.new(camera.CFrame.Position, head2.Position)
+        local head = getNearestPlayerHead()
+        if head then
+            camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
         end
     end)
 end
 
 local function stopLockHead()
     lockHeadEnabled = false
-    if lockConnection and lockConnection.Connected then
+    if lockConnection then
         lockConnection:Disconnect()
         lockConnection = nil
     end
     camera.CameraType = previousCameraType or Enum.CameraType.Custom
 end
 
--- ---------- 功能按鈕 ----------
+-- 功能按鈕
 createToggle(content, "視角瞬移", function(state)
     flyEnabled = state
     if flyEnabled then task.spawn(flyLoop) end
@@ -324,20 +302,18 @@ createToggle(content, "鎖定玩家", function(state)
     if state then startLockHead() else stopLockHead() end
 end, 4)
 
--- ---------- 最小化 / 還原 ----------
+-- 最小化 / 還原
 minimizeBtn.MouseButton1Click:Connect(function()
     frame.Visible = false
     miniFrame.Visible = true
 end)
-
 miniFrame.MouseButton1Click:Connect(function()
     frame.Visible = true
     miniFrame.Visible = false
 end)
 
--- ---------- 關閉腳本 ----------
+-- 關閉腳本
 closeBtn.MouseButton1Click:Connect(function()
-    -- 清理所有功能
     flyEnabled = false
     hoverEnabled = false
     espEnabled = false
