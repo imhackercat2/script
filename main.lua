@@ -348,6 +348,8 @@ closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- ---------- 角色重生處理 ----------
+-- 角色重生處理
 player.CharacterAdded:Connect(function()
-    task.wait(1
+    task.wait(1)
+    character, rootPart, humanoid = getCharacter()
+end)
