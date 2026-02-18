@@ -1,4 +1,4 @@
--- [[ 掛貓豪華整合版 v1.3.4 ]]
+-- [[ 掛貓豪華整合版 v1.3.5 ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -7,29 +7,22 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 -- ---------- 核心變數 ----------
-local flyEnabled, hoverEnabled, espEnabled, lockHeadEnabled = false, false, false, false
+local flyEnabled, espEnabled, lockHeadEnabled = false, false, false
 local speed, interval = 6, 0.05
-local bodyVel = nil
 local espObjects, espConnections = {}, {}
 local lockConnection = nil
 
--- ---------- 隊伍判定工具 (核心修復) ----------
+-- ---------- 強化隊伍判定 ----------
 local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
+    -- 判斷是否有隊伍系統
+    local teams = game:GetService("Teams"):GetTeams()
+    if #teams <= 1 then return true end -- 沒分隊則視為對手
     
-    -- 如果遊戲沒有隊伍系統，全部視為敵人
-    if #game:GetService("Teams"):GetTeams() == 0 then return true end
-    
-    -- 檢查隊伍屬性
-    if player.Team ~= targetPlayer.Team then
+    -- 檢查 Team 物件或 TeamColor
+    if player.Team ~= targetPlayer.Team or player.TeamColor ~= targetPlayer.TeamColor then
         return true
     end
-    
-    -- 雙重檢查：檢查隊伍顏色 (針對某些特殊遊戲)
-    if player.TeamColor ~= targetPlayer.TeamColor then
-        return true
-    end
-    
     return false
 end
 
@@ -39,10 +32,10 @@ local function addESP(char)
     local targetPlayer = Players:GetPlayerFromCharacter(char)
     if not targetPlayer then return end
 
-    -- 清除舊的
     if char:FindFirstChild("ESP_Highlight") then char.ESP_Highlight:Destroy() end
 
     local enemyStatus = isEnemy(targetPlayer)
+    -- 強制定義：敵人紅，隊友綠
     local highlightColor = enemyStatus and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(0, 255, 100)
 
     local h = Instance.new("Highlight")
@@ -50,6 +43,7 @@ local function addESP(char)
     h.FillColor = highlightColor
     h.FillTransparency = 0.5
     h.OutlineColor = Color3.fromRGB(255, 255, 255)
+    h.OutlineTransparency = 0
     h.Parent = char
     espObjects[char] = h
 end
@@ -68,28 +62,7 @@ local function toggleESP(state)
     end
 end
 
-local function toggleLock(state)
-    lockHeadEnabled = state
-    if state then
-        lockConnection = RunService.RenderStepped:Connect(function()
-            local nearest, dist = nil, math.huge
-            for _, p in pairs(Players:GetPlayers()) do
-                if isEnemy(p) and p.Character and p.Character:FindFirstChild("Head") then
-                    local hum = p.Character:FindFirstChild("Humanoid")
-                    if hum and hum.Health > 0 then
-                        local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
-                        if d < dist then dist = d nearest = p.Character.Head end
-                    end
-                end
-            end
-            if nearest then camera.CFrame = CFrame.new(camera.CFrame.Position, nearest.Position) end
-        end)
-    else
-        if lockConnection then lockConnection:Disconnect() end
-    end
-end
-
--- ---------- 拖拽邏輯 ----------
+-- ---------- 拖動邏輯 ----------
 local function makeDraggable(gui)
     local dragging, dragStart, startPos
     gui.InputBegan:Connect(function(input)
@@ -106,103 +79,168 @@ local function makeDraggable(gui)
     end)
 end
 
--- ---------- UI 介面 ----------
-local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "NekoHub_v1.3.4"
+-- ---------- UI 介面構築 ----------
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "NekoHub_v1.3.5"
 screenGui.ResetOnSpawn = false
 
--- 小球 (修正外觀)
+-- 1. 修復版小球
 local miniButton = Instance.new("TextButton", screenGui)
+miniButton.Name = "MiniButton"
 miniButton.Size = UDim2.new(0, 60, 0, 60)
-miniButton.Position = UDim2.new(0.1, 0, 0.4, 0)
-miniButton.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
+miniButton.Position = UDim2.new(0, 50, 0.5, 0)
+miniButton.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
 miniButton.Text = "Neko"
-miniButton.Font = Enum.Font.GothamBlack
-miniButton.TextScaled = true -- 修正字體大小問題
+miniButton.Font = Enum.Font.SourceSansBold
+miniButton.TextScaled = true -- 讓文字自動縮放填充
 miniButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 miniButton.Visible = false
+miniButton.ZIndex = 10
 Instance.new("UICorner", miniButton).CornerRadius = UDim.new(1, 0)
-local stroke = Instance.new("UIStroke", miniButton)
-stroke.Thickness = 3; stroke.Color = Color3.fromRGB(255,255,255)
+Instance.new("UIStroke", miniButton).Thickness = 2
 makeDraggable(miniButton)
 
--- 主面板
+-- 2. 修復版主面板
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 260, 0, 320)
-mainFrame.Position = UDim2.new(0.5, -130, 0.5, -160)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+mainFrame.Size = UDim2.new(0, 260, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -130, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 15)
+mainFrame.ZIndex = 5
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 makeDraggable(mainFrame)
 
--- 標題列按鈕
+-- 3. 標題與按鈕區 (確保可見)
 local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 40)
 topBar.BackgroundTransparency = 1
+topBar.ZIndex = 6
 
-local closeBtn = Instance.new("TextButton", topBar)
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -35, 0, 5)
-closeBtn.Text = "×"; closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-closeBtn.TextSize = 25; closeBtn.BackgroundTransparency = 1
+local titleLabel = Instance.new("TextLabel", topBar)
+titleLabel.Size = UDim2.new(1, -70, 1, 0)
+titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.Text = "NEKO HUB v1.3.5"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 14
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.ZIndex = 7
 
 local minBtn = Instance.new("TextButton", topBar)
 minBtn.Size = UDim2.new(0, 30, 0, 30)
 minBtn.Position = UDim2.new(1, -65, 0, 5)
-minBtn.Text = "─"; minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-minBtn.TextSize = 20; minBtn.BackgroundTransparency = 1
+minBtn.Text = "─"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.BackgroundTransparency = 1
+minBtn.TextSize = 18
+minBtn.ZIndex = 7
 
--- 功能清單
+local closeBtn = Instance.new("TextButton", topBar)
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 5)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+closeBtn.BackgroundTransparency = 1
+closeBtn.TextSize = 18
+closeBtn.ZIndex = 7
+
+-- 4. 功能滾動區
 local container = Instance.new("ScrollingFrame", mainFrame)
-container.Size = UDim2.new(1, -20, 1, -50)
+container.Size = UDim2.new(1, -20, 1, -55)
 container.Position = UDim2.new(0, 10, 0, 45)
-container.BackgroundTransparency = 1; container.ScrollBarThickness = 0
-Instance.new("UIListLayout", container).Padding = UDim.new(0, 8)
+container.BackgroundTransparency = 1
+container.ScrollBarThickness = 0
+container.ZIndex = 6
+local layout = Instance.new("UIListLayout", container)
+layout.Padding = UDim.new(0, 8)
 
 local function createToggle(name, callback)
     local btn = Instance.new("TextButton", container)
-    btn.Size = UDim2.new(1, 0, 0, 45); btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    btn.Text = ""; btn.AutoButtonColor = false
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+    btn.Size = UDim2.new(1, 0, 0, 40)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    btn.ZIndex = 7
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     
     local lab = Instance.new("TextLabel", btn)
-    lab.Size = UDim2.new(1, -50, 1, 0); lab.Position = UDim2.new(0, 12, 0, 0)
-    lab.Text = name; lab.TextColor3 = Color3.fromRGB(200, 200, 200)
-    lab.Font = Enum.Font.Gotham; lab.BackgroundTransparency = 1; lab.TextXAlignment = Enum.TextXAlignment.Left
+    lab.Size = UDim2.new(1, -50, 1, 0)
+    lab.Position = UDim2.new(0, 10, 0, 0)
+    lab.Text = name
+    lab.TextColor3 = Color3.fromRGB(220, 220, 220)
+    lab.Font = Enum.Font.Gotham
+    lab.BackgroundTransparency = 1
+    lab.TextXAlignment = Enum.TextXAlignment.Left
+    lab.ZIndex = 8
 
     local tFrame = Instance.new("Frame", btn)
-    tFrame.Size = UDim2.new(0, 30, 0, 16); tFrame.Position = UDim2.new(1, -40, 0.5, -8)
-    tFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 70); Instance.new("UICorner", tFrame).CornerRadius = UDim.new(1, 0)
+    tFrame.Size = UDim2.new(0, 30, 0, 16)
+    tFrame.Position = UDim2.new(1, -40, 0.5, -8)
+    tFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+    tFrame.ZIndex = 8
+    Instance.new("UICorner", tFrame).CornerRadius = UDim.new(1, 0)
 
     local dot = Instance.new("Frame", tFrame)
-    dot.Size = UDim2.new(0, 12, 0, 12); dot.Position = UDim2.new(0, 2, 0.5, -6)
-    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255); Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+    dot.Size = UDim2.new(0, 12, 0, 12)
+    dot.Position = UDim2.new(0, 2, 0.5, -6)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dot.ZIndex = 9
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
 
     local active = false
     btn.MouseButton1Click:Connect(function()
         active = not active
-        TweenService:Create(tFrame, TweenInfo.new(0.2), {BackgroundColor3 = active and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(60, 60, 70)}):Play()
+        TweenService:Create(tFrame, TweenInfo.new(0.2), {BackgroundColor3 = active and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(70, 70, 80)}):Play()
         TweenService:Create(dot, TweenInfo.new(0.2), {Position = active and UDim2.new(1, -14, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)}):Play()
         callback(active)
     end)
 end
 
--- ---------- 綁定與交互 ----------
+-- ---------- 按鈕交互 ----------
 minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; miniButton.Visible = true end)
 miniButton.MouseButton1Click:Connect(function() miniButton.Visible = false; mainFrame.Visible = true end)
-closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); toggleESP(false); toggleLock(false) end)
+closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); toggleESP(false); lockHeadEnabled = false end)
 
-createToggle("視角飛行 (Fly)", function(s) flyEnabled = s; if s then task.spawn(function()
-    while flyEnabled do
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if root and player.Character.Humanoid.MoveDirection.Magnitude > 0 then
-            root.CFrame += camera.CFrame.LookVector * speed; root.Velocity = Vector3.zero
+-- ---------- 功能綁定 ----------
+createToggle("視角飛行 (Fly)", function(s) 
+    flyEnabled = s 
+    if s then task.spawn(function()
+        while flyEnabled do
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                if char.Humanoid.MoveDirection.Magnitude > 0 then
+                    char.HumanoidRootPart.CFrame += camera.CFrame.LookVector * speed
+                    char.HumanoidRootPart.Velocity = Vector3.zero
+                end
+            end
+            task.wait(interval)
         end
-        task.wait(interval)
-    end
-end) end end)
+    end) end 
+end)
 
 createToggle("敵紅隊綠 (ESP)", toggleESP)
-createToggle("自動鎖頭 (Aim)", toggleLock)
 
-print("掛貓 v1.3.4 修復完成")
+createToggle("自動鎖頭 (Aim)", function(s)
+    lockHeadEnabled = s
+    if s then
+        RunService:BindToRenderStep("NekoLock", 1, function()
+            if not lockHeadEnabled then RunService:UnbindFromRenderStep("NekoLock") return end
+            local nearest, dist = nil, math.huge
+            for _, p in pairs(Players:GetPlayers()) do
+                if isEnemy(p) and p.Character and p.Character:FindFirstChild("Head") then
+                    local hum = p.Character:FindFirstChild("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
+                        if d < dist then dist = d nearest = p.Character.Head end
+                    end
+                end
+            end
+            if nearest then camera.CFrame = CFrame.new(camera.CFrame.Position, nearest.Position) end
+        end)
+    else
+        RunService:UnbindFromRenderStep("NekoLock")
+    end
+end)
+
+print("掛貓 v1.3.5 修復完成 - 標題與小球已校正")
