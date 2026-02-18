@@ -1,4 +1,4 @@
--- [[ 掛貓豪華整合版 v1.3.2 ]]
+-- [[ 掛貓豪華整合版 v1.3.3 ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -20,9 +20,7 @@ local function getCharacterInfo()
 end
 local character, rootPart, humanoid = getCharacterInfo()
 
--- ---------- 核心功能區域 ----------
-
--- 1. 飛行與懸停
+-- ---------- 核心功能 (保持 1.3.2 邏輯) ----------
 local function flyLoop()
     while flyEnabled do
         if rootPart and humanoid and humanoid.MoveDirection.Magnitude > 0 and not hoverEnabled then
@@ -47,22 +45,19 @@ local function toggleHover(state)
     end
 end
 
--- 2. ESP 邏輯 (敵人紅、隊友綠)
 local function addESP(char)
     if not char or char == player.Character then return end
     local targetPlayer = Players:GetPlayerFromCharacter(char)
     if not targetPlayer then return end
-
     local isTeammate = player.Team and targetPlayer.Team == player.Team
     local highlightColor = isTeammate and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 50, 50)
-
     if not char:FindFirstChild("ESP_Highlight") then
         local h = Instance.new("Highlight", char)
         h.Name = "ESP_Highlight"
         h.FillColor = highlightColor
         h.FillTransparency = 0.6
         h.OutlineColor = Color3.fromRGB(255, 255, 255)
-        h.OutlineTransparency = 0.2
+        h.Parent = char
         espObjects[char] = h
     end
 end
@@ -81,37 +76,63 @@ local function toggleESP(state)
     end
 end
 
--- 3. 鎖頭
-local function getNearestEnemyHead()
-    local nearest, dist = nil, math.huge
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
-            if player.Team and p.Team == player.Team then continue end -- 跳過隊友
-            local hum = p.Character:FindFirstChild("Humanoid")
-            if hum and hum.Health > 0 then
-                local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
-                if d < dist then dist = d nearest = p.Character.Head end
-            end
-        end
-    end
-    return nearest
-end
-
 local function toggleLock(state)
     lockHeadEnabled = state
     if state then
         lockConnection = RunService.RenderStepped:Connect(function()
-            local target = getNearestEnemyHead()
-            if target then camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position) end
+            local nearest, dist = nil, math.huge
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
+                    if player.Team and p.Team == player.Team then continue end
+                    local hum = p.Character:FindFirstChild("Humanoid")
+                    if hum and hum.Health > 0 then
+                        local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
+                        if d < dist then dist = d nearest = p.Character.Head end
+                    end
+                end
+            end
+            if nearest then camera.CFrame = CFrame.new(camera.CFrame.Position, nearest.Position) end
         end)
     else
         if lockConnection then lockConnection:Disconnect() end
     end
 end
 
--- ---------- UI 介面構築 ----------
+-- ---------- 拖動功能函式 (核心升級) ----------
+local function makeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+    
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- ---------- UI 介面 ----------
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name = "NekoHub_v1.3.2"
+screenGui.Name = "NekoHub_v1.3.3"
 screenGui.ResetOnSpawn = false
 
 -- 主面板
@@ -121,44 +142,46 @@ mainFrame.Position = UDim2.new(0.5, -140, 0.5, -160)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 15)
+makeDraggable(mainFrame) -- 啟用主面板拖動
 
--- 最小化後的小球
+-- 最小化按鈕 (橘色小球)
 local miniButton = Instance.new("TextButton", screenGui)
-miniButton.Size = UDim2.new(0, 50, 0, 50)
-miniButton.Position = mainFrame.Position
-miniButton.BackgroundColor3 = Color3.fromRGB(255, 150, 0)
+miniButton.Size = UDim2.new(0, 55, 0, 55)
+miniButton.Position = UDim2.new(0.1, 0, 0.5, 0)
+miniButton.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
 miniButton.Text = "貓"
 miniButton.Font = Enum.Font.GothamBold
 miniButton.TextSize = 24
-miniButton.TextColor3 = Color3.fromRGB(255,255,255)
+miniButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 miniButton.Visible = false
 Instance.new("UICorner", miniButton).CornerRadius = UDim.new(1, 0)
+local miniStroke = Instance.new("UIStroke", miniButton)
+miniStroke.Color = Color3.fromRGB(255, 255, 255)
+miniStroke.Thickness = 2
+makeDraggable(miniButton) -- 啟用小球拖動
 
--- 頂部欄
+-- 頂部標題欄
 local topBar = Instance.new("Frame", mainFrame)
 topBar.Size = UDim2.new(1, 0, 0, 40)
-topBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-topBar.BorderSizePixel = 0
-Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 15)
+topBar.BackgroundTransparency = 1 -- 透明，由主面板顯示背景
 
 local title = Instance.new("TextLabel", topBar)
 title.Size = UDim2.new(1, -80, 1, 0)
 title.Position = UDim2.new(0, 15, 0, 0)
-title.Text = "掛貓 NEKO v1.3.2"
+title.Text = "掛貓 NEKO v1.3.3"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
 title.BackgroundTransparency = 1
 title.TextXAlignment = Enum.TextXAlignment.Left
 
--- 最小化按鈕
+-- 縮小與關閉按鈕
 local minBtn = Instance.new("TextButton", topBar)
 minBtn.Size = UDim2.new(0, 30, 0, 30)
 minBtn.Position = UDim2.new(1, -70, 0, 5)
 minBtn.Text = "─"
-minBtn.TextColor3 = Color3.fromRGB(255,255,255)
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minBtn.BackgroundTransparency = 1
 
--- 關閉按鈕
 local closeBtn = Instance.new("TextButton", topBar)
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
 closeBtn.Position = UDim2.new(1, -35, 0, 5)
@@ -166,7 +189,7 @@ closeBtn.Text = "✕"
 closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
 closeBtn.BackgroundTransparency = 1
 
--- 功能清單
+-- 功能按鈕容器
 local container = Instance.new("ScrollingFrame", mainFrame)
 container.Size = UDim2.new(1, -20, 1, -55)
 container.Position = UDim2.new(0, 10, 0, 50)
@@ -207,17 +230,14 @@ local function createToggle(name, callback)
     btn.MouseButton1Click:Connect(function()
         active = not active
         TweenService:Create(toggleFrame, TweenInfo.new(0.2), {BackgroundColor3 = active and Color3.fromRGB(0, 220, 120) or Color3.fromRGB(70, 70, 80)}):Play()
-        TweenService:Create(dot, TweenInfo.new(0.2), {Position = active and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}):Play()
+        TweenService:Create(dot, TweenInfo.new(0.2), {Position = active and UDim2.new(1, -14, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}):Play()
         callback(active)
     end)
 end
 
--- ---------- UI 交互邏輯 ----------
-
--- 最小化與還原
+-- ---------- 按鈕交互 ----------
 minBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = false
-    miniButton.Position = mainFrame.Position
     miniButton.Visible = true
 end)
 
@@ -226,7 +246,6 @@ miniButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = true
 end)
 
--- 關閉腳本
 closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
     toggleESP(false)
@@ -235,20 +254,7 @@ closeBtn.MouseButton1Click:Connect(function()
     flyEnabled = false
 end)
 
--- 拖拽功能 (修正：小球與主面板同步位置)
-local function makeDraggable(obj)
-    local dragging, dragStart, startPos
-    obj.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true dragStart = i.Position startPos = obj.Position end end)
-    UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = i.Position - dragStart
-        obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
-end
-makeDraggable(topBar.Parent)
-makeDraggable(miniButton)
-
--- ---------- 綁定功能 ----------
+-- ---------- 功能綁定 ----------
 createToggle("視角瞬移 (Fly)", function(s) flyEnabled = s if s then task.spawn(flyLoop) end end)
 createToggle("空中懸停 (Hover)", toggleHover)
 createToggle("全體透視 (敵人紅/隊友綠)", toggleESP)
@@ -259,4 +265,4 @@ player.CharacterAdded:Connect(function()
     character, rootPart, humanoid = getCharacterInfo()
 end)
 
-print("掛貓 v1.3.2 載入成功！")
+print("掛貓 v1.3.3 拖動版已載入成功！")
