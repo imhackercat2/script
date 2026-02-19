@@ -12,7 +12,7 @@ _G.NekoAim = false
 _G.NekoESP = false
 
 local flySpeed = 85
-local walkSpeedAdd = 90 
+local walkSpeedAdd = 80 -- 已修改：速度改成 80
 
 -- ---------- [ 1. 拖動系統 ] ----------
 local function makeDraggable(frame)
@@ -70,9 +70,9 @@ local function addToggle(txt, varName)
     b.MouseButton1Click:Connect(function() _G[varName] = not _G[varName]; b.BackgroundColor3 = _G[varName] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(40, 40, 45) end)
 end
 addToggle("飛行 (強制覆蓋物理)", "NekoFly")
-addToggle("透視 (ESP 0.5s)", "NekoESP")
+addToggle("透視 (ESP 0.2s)", "NekoESP")
 addToggle("鎖頭 (Aimbot)", "NekoAim")
-addToggle("移速 (90)", "NekoSpeed")
+addToggle("移速 (80)", "NekoSpeed")
 
 -- ---------- [ 3. 核心邏輯 - 解決互斥 ] ----------
 RunService.Heartbeat:Connect(function()
@@ -117,9 +117,9 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ---------- [ 4. ESP 系統 (0.5s 刷新) ] ----------
+-- ---------- [ 4. ESP 系統 (0.2s 刷新) ] ----------
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.2) do -- 已修改：ESP 改成 0.2s 刷新
         if not screenGui.Parent then break end
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
