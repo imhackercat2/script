@@ -1,24 +1,23 @@
--- [[ NEKO HUB v2.6.0 - MOBILE STABLE OPTIMIZED ]]
+-- [[ NEKO HUB v2.7.0 - STABLE MOBILE ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
--- [ 狀態控制 ]
+-- [ 狀態管理 ]
 _G.NekoFly = false
 _G.NekoSpeed = false
 _G.NekoAim = false
 _G.NekoESP = false
 
--- [ 參數 ]
 local flySpeed = 85
 local walkSpeedAdd = 90 
+local runningConnections = {} -- 用於徹底關閉
 
--- ---------- [ 1. 拖動系統 ] ----------
+-- ---------- [ 1. 拖動功能 ] ----------
 local function makeDraggable(frame)
-    local dragging = false
-    local dragStart, startPos
+    local dragging, dragStart, startPos
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; dragStart = input.Position; startPos = frame.Position
@@ -35,13 +34,12 @@ end
 
 -- ---------- [ 2. UI 構建 ] ----------
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "Neko_Final_v26"; screenGui.ResetOnSpawn = false
+screenGui.Name = "NekoHub_v27"; screenGui.ResetOnSpawn = false
 
 local miniBtn = Instance.new("TextButton", screenGui)
 miniBtn.Size = UDim2.new(0, 60, 0, 60); miniBtn.Position = UDim2.new(0, 20, 0.5, 0)
-miniBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0); miniBtn.Text = "🐱"
-miniBtn.Visible = false; miniBtn.ZIndex = 20; Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(1, 0)
-makeDraggable(miniBtn)
+miniBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0); miniBtn.Text = "🐱"; miniBtn.Visible = false; miniBtn.ZIndex = 20
+Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(1, 0); makeDraggable(miniBtn)
 
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0, 250, 0, 320); mainFrame.Position = UDim2.new(0.5, -125, 0.5, -160)
@@ -49,14 +47,18 @@ mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25); Instance.new("UICorner"
 makeDraggable(mainFrame)
 
 local title = Instance.new("TextLabel", mainFrame)
-title.Text = "  NEKO HUB v2.6.0"; title.Size = UDim2.new(1, 0, 0, 45); title.TextColor3 = Color3.new(1, 1, 1); title.BackgroundTransparency = 1; title.Font = Enum.Font.GothamBold; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 5
+title.Text = "  NEKO HUB v2.7.0"; title.Size = UDim2.new(1, 0, 0, 45); title.TextColor3 = Color3.new(1, 1, 1); title.BackgroundTransparency = 1; title.Font = Enum.Font.GothamBold; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 10
 
 local function createTopBtn(txt, pos, color, cb)
     local b = Instance.new("TextButton", mainFrame)
-    b.Text = txt; b.Size = UDim2.new(0, 35, 0, 35); b.Position = pos; b.BackgroundTransparency = 1; b.TextColor3 = color; b.ZIndex = 10; b.TextSize = 20; b.MouseButton1Click:Connect(cb)
+    b.Text = txt; b.Size = UDim2.new(0, 35, 0, 35); b.Position = pos; b.BackgroundTransparency = 1; b.TextColor3 = color; b.ZIndex = 15; b.TextSize = 20; b.MouseButton1Click:Connect(cb)
 end
 createTopBtn("─", UDim2.new(1, -80, 0, 5), Color3.new(1,1,1), function() mainFrame.Visible = false; miniBtn.Visible = true end)
-createTopBtn("✕", UDim2.new(1, -40, 0, 5), Color3.new(1,0.3,0.3), function() _G.NekoFly = false; _G.NekoSpeed = false; _G.NekoAim = false; _G.NekoESP = false; screenGui:Destroy() end)
+createTopBtn("✕", UDim2.new(1, -40, 0, 5), Color3.new(1,0.3,0.3), function() 
+    _G.NekoFly = false; _G.NekoSpeed = false; _G.NekoAim = false; _G.NekoESP = false
+    for _, conn in pairs(runningConnections) do conn:Disconnect() end
+    screenGui:Destroy() 
+end)
 miniBtn.MouseButton1Click:Connect(function() miniBtn.Visible = false; mainFrame.Visible = true end)
 
 local scroll = Instance.new("ScrollingFrame", mainFrame)
@@ -65,48 +67,43 @@ Instance.new("UIListLayout", scroll).Padding = UDim.new(0, 8)
 
 local function addToggle(txt, varName)
     local b = Instance.new("TextButton", scroll)
-    b.Size = UDim2.new(1, 0, 0, 45); b.Text = "  "..txt; b.BackgroundColor3 = Color3.fromRGB(40, 40, 45); b.TextColor3 = Color3.new(1, 1, 1); b.TextXAlignment = Enum.TextXAlignment.Left; b.ZIndex = 5; Instance.new("UICorner", b)
+    b.Size = UDim2.new(1, 0, 0, 45); b.Text = "  "..txt; b.BackgroundColor3 = Color3.fromRGB(40, 40, 45); b.TextColor3 = Color3.new(1, 1, 1); b.TextXAlignment = Enum.TextXAlignment.Left; b.ZIndex = 10; Instance.new("UICorner", b)
     b.MouseButton1Click:Connect(function() _G[varName] = not _G[varName]; b.BackgroundColor3 = _G[varName] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(40, 40, 45) end)
 end
-addToggle("平滑飛行 (手機優化)", "NekoFly")
-addToggle("詳細透視 (縮小文字)", "NekoESP")
-addToggle("自動鎖頭 (Aimbot)", "NekoAim")
-addToggle("移速增強 (90)", "NekoSpeed")
+addToggle("手機飛行", "NekoFly")
+addToggle("透視 (人物+距離)", "NekoESP")
+addToggle("自動鎖頭", "NekoAim")
+addToggle("移速 (90)", "NekoSpeed")
 
--- ---------- [ 3. 核心物理引擎 ] ----------
-RunService.Heartbeat:Connect(function()
-    if not screenGui.Parent then return end
+-- ---------- [ 3. 核心邏輯處理 ] ----------
+local hbConn = RunService.Heartbeat:Connect(function()
     local char = player.Character; local root = char and char:FindFirstChild("HumanoidRootPart"); local hum = char and char:FindFirstChild("Humanoid")
     if not root or not hum then return end
 
+    -- 飛行邏輯
     if _G.NekoFly then
-        local v = root:FindFirstChild("NekoV")
-        if not v then
-            v = Instance.new("BodyVelocity")
-            v.Name = "NekoV"
-            v.Parent = root
-        end
+        local v = root:FindFirstChild("NekoV") or Instance.new("BodyVelocity", root)
+        v.Name = "NekoV"
         hum.PlatformStand = true
-        
-        if hum.MoveDirection.Magnitude > 0.15 then
-            -- 移動中：適度力量
-            v.MaxForce = Vector3.new(400000, 400000, 400000)
+        if hum.MoveDirection.Magnitude > 0.1 then
+            v.MaxForce = Vector3.new(1e6, 1e6, 1e6)
             v.Velocity = camera.CFrame.LookVector * flySpeed
         else
-            -- 煞車中：增強力量，歸零速度
-            v.MaxForce = Vector3.new(800000, 800000, 800000)
-            v.Velocity = Vector3.new(0, 0, 0)
+            v.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            v.Velocity = Vector3.zero -- 鎖死速度，不抖動
         end
         root.RotVelocity = Vector3.zero
     else
         if root:FindFirstChild("NekoV") then root.NekoV:Destroy() end
-        hum.PlatformStand = false
+        if hum.PlatformStand then hum.PlatformStand = false end
     end
 
-    if _G.NekoSpeed and hum.MoveDirection.Magnitude > 0.15 then
+    -- 移速
+    if _G.NekoSpeed and hum.MoveDirection.Magnitude > 0.1 then
         root.Velocity = Vector3.new(hum.MoveDirection.X * walkSpeedAdd, root.Velocity.Y, hum.MoveDirection.Z * walkSpeedAdd)
     end
 
+    -- 鎖頭
     if _G.NekoAim then
         local t = nil; local minD = math.huge
         for _, p in pairs(Players:GetPlayers()) do
@@ -118,8 +115,9 @@ RunService.Heartbeat:Connect(function()
         if t then camera.CFrame = CFrame.new(camera.CFrame.Position, t.Position) end
     end
 end)
+table.insert(runningConnections, hbConn)
 
--- ---------- [ 4. ESP 系統 ] ----------
+-- ---------- [ 4. ESP 系統 (0.5s 刷新) ] ----------
 task.spawn(function()
     while task.wait(0.5) do
         if not screenGui.Parent then break end
