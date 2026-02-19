@@ -1,4 +1,4 @@
--- [[ 掛貓 NEKO HUB v1.5.5 - 按鍵感應飛行修正版 ]]
+-- [[ 掛貓 NEKO HUB v1.5.6 - 硬性懸停與感應飛行版 ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -19,7 +19,7 @@ end
 
 -- [ UI 構建 ]
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "NekoHub_v155"; screenGui.ResetOnSpawn = false
+screenGui.Name = "NekoHub_v156"; screenGui.ResetOnSpawn = false
 
 local miniBall = Instance.new("TextButton", screenGui)
 miniBall.Size = UDim2.new(0, 55, 0, 55); miniBall.Position = UDim2.new(0, 20, 0.5, 0); miniBall.BackgroundColor3 = Color3.fromRGB(255, 140, 0); miniBall.Text = "🐱"; miniBall.Visible = false; miniBall.ZIndex = 10; Instance.new("UICorner", miniBall).CornerRadius = UDim.new(1, 0)
@@ -39,19 +39,19 @@ local function addToggle(name, color, cb)
 end
 
 addToggle("移速加成 (Speed)", Color3.fromRGB(0, 180, 100), function(v) walkSpeedEnabled = v end)
-addToggle("按鍵感應飛行 (Fly)", Color3.fromRGB(0, 180, 100), function(v) flyEnabled = v end)
+addToggle("硬性懸停飛行 (Fly)", Color3.fromRGB(0, 180, 100), function(v) flyEnabled = v end)
 addToggle("強制 FFA 模式", Color3.fromRGB(255, 120, 0), function(v) forceFFA = v end)
 addToggle("智能透視 (ESP)", Color3.fromRGB(0, 180, 100), function(v) espEnabled = v end)
 addToggle("暴力鎖頭 (Aim)", Color3.fromRGB(0, 180, 100), function(v) lockHeadEnabled = v end)
 
--- UI 控制按鈕
+-- UI 控制
 local closeBtn = Instance.new("TextButton", mainFrame)
 closeBtn.Text = "✕"; closeBtn.Size = UDim2.new(0, 30, 0, 30); closeBtn.Position = UDim2.new(1, -35, 0, 7); closeBtn.TextColor3 = Color3.new(1, 0.4, 0.4); closeBtn.BackgroundTransparency = 1; closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
 local minBtn = Instance.new("TextButton", mainFrame)
 minBtn.Text = "─"; minBtn.Size = UDim2.new(0, 30, 0, 30); minBtn.Position = UDim2.new(1, -65, 0, 7); minBtn.TextColor3 = Color3.new(1, 1, 1); minBtn.BackgroundTransparency = 1; minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; miniBall.Visible = true end)
 miniBall.MouseButton1Click:Connect(function() miniBall.Visible = false; mainFrame.Visible = true end)
 
--- [ 判定與核心循環 ]
+-- [ 核心循環 ]
 local function checkIsEnemy(t)
     if not t or t == player then return false end
     if forceFFA then return true end
@@ -69,18 +69,25 @@ RunService.Heartbeat:Connect(function()
         root.Velocity = Vector3.new(hum.MoveDirection.X * speedPower, root.Velocity.Y, hum.MoveDirection.Z * speedPower)
     end
     
-    -- 2. 感應式飛行 (核心優化)
-    local f = root:FindFirstChild("NekoFly")
-    if flyEnabled and hum.MoveDirection.Magnitude > 0 then
-        -- 只有在按住移動鍵時才創建/更新推力
+    -- 2. 飛行與硬性懸停
+    local f = root:FindFirstChild("NekoFlyForce")
+    if flyEnabled then
         if not f then
             f = Instance.new("BodyVelocity", root)
-            f.Name = "NekoFly"
-            f.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            f.Name = "NekoFlyForce"
+            f.MaxForce = Vector3.new(1e6, 1e6, 1e6) -- 給予極大的力抵消重力
         end
-        f.Velocity = camera.CFrame.LookVector * flyPower
+        
+        if hum.MoveDirection.Magnitude > 0 then
+            -- 操作時：感應移動
+            f.Velocity = camera.CFrame.LookVector * flyPower
+        else
+            -- 沒操作時：強制懸停 (釘在空中)
+            f.Velocity = Vector3.new(0, 0, 0)
+        end
+        -- 防止角色因為物理碰撞亂轉
+        root.RotVelocity = Vector3.new(0, 0, 0)
     else
-        -- 沒操作或沒開功能，立刻刪除推力，讓重力接管
         if f then f:Destroy() end
     end
 
@@ -97,7 +104,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- [ 4. ESP 循環 ]
+-- [ ESP 循環 ]
 task.spawn(function()
     while screenGui and screenGui.Parent do
         if espEnabled then
