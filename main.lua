@@ -1,22 +1,20 @@
--- [[ NEKO HUB v2.2.0 - MOBILE ULTIMATE STABLE ]]
+-- [[ NEKO HUB v2.3.0 - ZERO JITTER MOBILE ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
--- [ 全域狀態 ]
+-- [ 狀態變數 ]
 _G.NekoFly = false
 _G.NekoSpeed = false
 _G.NekoAim = false
 _G.NekoESP = false
 
--- [ 參數設定 ]
 local flySpeed = 80
-local walkSpeedAdd = 100 -- 依照要求改為 100
-local lastHoverCFrame = nil -- 用於鎖死位置
+local walkSpeedAdd = 100
 
--- ---------- [ 1. 手機專用拖動系統 ] ----------
+-- ---------- [ 1. 手機 UI 拖動 (穩定版) ] ----------
 local function makeMobileDraggable(frame)
     local dragging = false
     local dragInput, dragStart, startPos
@@ -45,7 +43,7 @@ end
 
 -- ---------- [ 2. UI 構建 ] ----------
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "NekoHub_v220"
+screenGui.Name = "NekoHub_v230"
 screenGui.ResetOnSpawn = false
 
 local miniBtn = Instance.new("TextButton", screenGui)
@@ -83,12 +81,12 @@ local function addToggle(txt, varName)
     end)
 end
 
-addToggle("感應飛行 (搖桿控飛)", "NekoFly")
-addToggle("詳細透視 (人物/名/距)", "NekoESP")
+addToggle("感應飛行 (零抖動)", "NekoFly")
+addToggle("詳細透視 (人物高亮)", "NekoESP")
 addToggle("自動鎖頭 (Aimbot)", "NekoAim")
-addToggle("穩定移速加成 (100)", "NekoSpeed")
+addToggle("移速加成 (100)", "NekoSpeed")
 
--- ---------- [ 3. 核心物理邏輯 ] ----------
+-- ---------- [ 3. 核心物理核心 ] ----------
 local function getIsEnemy(p)
     if not p or p == player or not p.Character then return false end
     if player.Team and p.Team then return player.Team ~= p.Team end
@@ -102,7 +100,7 @@ RunService.Heartbeat:Connect(function()
     local hum = char and char:FindFirstChild("Humanoid")
     if not root or not hum then return end
 
-    -- [ 飛行核心：搖桿監測 + 硬性鎖位 ]
+    -- [ 飛行優化版 ]
     local force = root:FindFirstChild("NekoFlyForce")
     if _G.NekoFly then
         if not force then
@@ -110,23 +108,23 @@ RunService.Heartbeat:Connect(function()
             force.Name = "NekoFlyForce"; force.MaxForce = Vector3.new(1e7, 1e7, 1e7)
         end
         
-        -- 手機虛擬搖桿判定
         if hum.MoveDirection.Magnitude > 0.15 then
+            -- 移動中：啟動物理推動力，關閉錨定
+            root.Anchored = false
             force.Velocity = camera.CFrame.LookVector * flySpeed
-            lastHoverCFrame = nil -- 移動時解鎖
         else
-            -- 搖桿回彈瞬間：立即停止慣性並釘住座標
+            -- 停下時：直接物理錨定 (這絕對不會抖動)
             force.Velocity = Vector3.new(0, 0, 0)
-            if not lastHoverCFrame then lastHoverCFrame = root.CFrame end
-            root.CFrame = lastHoverCFrame 
+            root.Anchored = true 
         end
-        root.RotVelocity = Vector3.zero
-    elseif force then
-        force:Destroy()
-        lastHoverCFrame = nil
+        root.RotVelocity = Vector3.new(0,0,0)
+    else
+        -- 關閉功能時務必解除錨定，否則會卡在空中
+        if root.Anchored and not _G.NekoFly then root.Anchored = false end
+        if force then force:Destroy() end
     end
 
-    -- [ 移速：針對 100 數值優化 ]
+    -- [ 移速 ]
     if _G.NekoSpeed and hum.MoveDirection.Magnitude > 0.15 then
         root.Velocity = Vector3.new(hum.MoveDirection.X * walkSpeedAdd, root.Velocity.Y, hum.MoveDirection.Z * walkSpeedAdd)
     end
@@ -144,7 +142,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ---------- [ 4. 全功能 ESP 系統 ] ----------
+-- ---------- [ 4. ESP 系統 ] ----------
 task.spawn(function()
     while task.wait(0.4) do
         if not screenGui.Parent then break end
@@ -156,7 +154,6 @@ task.spawn(function()
                     local high = p.Character:FindFirstChild("NekoHigh")
                     
                     if _G.NekoESP then
-                        -- 1. 名字與距離
                         if not bgui then
                             bgui = Instance.new("BillboardGui", head); bgui.Name = "NekoESP_Gui"
                             bgui.Size = UDim2.new(0, 100, 0, 40); bgui.AlwaysOnTop = true; bgui.StudsOffset = Vector3.new(0, 3, 0)
@@ -169,14 +166,11 @@ task.spawn(function()
                         bgui.TextLabel.Text = p.Name .. " [" .. dist .. "m]"
                         bgui.TextLabel.TextColor3 = isE and Color3.new(1, 0.1, 0.1) or Color3.new(0.1, 1, 0.1)
                         
-                        -- 2. 人物高光 (Highlight)
                         if not high then
-                            high = Instance.new("Highlight", p.Character)
-                            high.Name = "NekoHigh"
+                            high = Instance.new("Highlight", p.Character); high.Name = "NekoHigh"
                             high.OutlineTransparency = 0.3; high.FillTransparency = 0.5
                         end
-                        high.Enabled = true
-                        high.FillColor = bgui.TextLabel.TextColor3
+                        high.Enabled = true; high.FillColor = bgui.TextLabel.TextColor3
                     else
                         if bgui then bgui:Destroy() end
                         if high then high.Enabled = false end
