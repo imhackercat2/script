@@ -9,7 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 _G.NekoFly = false
 _G.NekoSpeed = false
 _G.NekoAim = false
-_G.NekoHardLock = false -- 新增：硬鎖狀態
+_G.NekoHardLock = false
 _G.NekoESP = false
 
 local flySpeed = 85
@@ -42,7 +42,7 @@ miniBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0); miniBtn.Text = "🐱"; m
 Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(1, 0); makeDraggable(miniBtn)
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 250, 0, 360); mainFrame.Position = UDim2.new(0.5, -125, 0.5, -180)
+mainFrame.Size = UDim2.new(0, 250, 0, 360); mainFrame.Position = UDim2.new(0.5, -125, 0.5, -160)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25); Instance.new("UICorner", mainFrame)
 makeDraggable(mainFrame)
 
@@ -72,16 +72,16 @@ end
 addToggle("飛行 (強制覆蓋物理)", "NekoFly")
 addToggle("透視 (ESP 0.2s)", "NekoESP")
 addToggle("鎖頭 (僅限敵人)", "NekoAim")
-addToggle("硬鎖 (不分敵我)", "NekoHardLock") -- 新增切換按鈕
+addToggle("硬鎖 (不分敵我)", "NekoHardLock")
 addToggle("移速 (80)", "NekoSpeed")
 
--- ---------- [ 3. 核心邏輯 ] ----------
+-- ---------- [ 3. 核心邏輯 - 解決互斥 ] ----------
 RunService.Heartbeat:Connect(function()
     if not screenGui.Parent then return end
     local char = player.Character; local root = char and char:FindFirstChild("HumanoidRootPart"); local hum = char and char:FindFirstChild("Humanoid")
     if not root or not hum then return end
 
-    -- 飛行與移速邏輯 (繼承 v2.8)
+    -- [ 飛行修復 ]
     if _G.NekoFly then
         local v = root:FindFirstChild("NekoV") or Instance.new("BodyVelocity", root)
         v.Name = "NekoV"; v.MaxForce = Vector3.new(9e9, 9e9, 9e9); hum.PlatformStand = true
@@ -97,19 +97,28 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- 鎖頭與硬鎖邏輯
+    -- [ 鎖頭核心 - 恢復完整判定 ]
     if _G.NekoAim or _G.NekoHardLock then
         local target = nil; local minD = math.huge
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player and p.Character and p.Character:FindFirstChild("Head") and p.Character.Humanoid.Health > 0 then
-                -- 如果是普通鎖頭則檢查隊伍，如果是硬鎖則不檢查
-                if _G.NekoHardLock or (p.Team ~= player.Team) then
-                    local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
-                    if d < minD then minD = d; target = p.Character.Head end
+            if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
+                local phum = p.Character:FindFirstChild("Humanoid")
+                if phum and phum.Health > 0 then
+                    local isEnemy = (p.Team ~= player.Team)
+                    -- 硬鎖優先於普通鎖頭判定
+                    if _G.NekoHardLock or (_G.NekoAim and isEnemy) then
+                        local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
+                        if d < minD then
+                            minD = d
+                            target = p.Character.Head
+                        end
+                    end
                 end
             end
         end
-        if target then camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position) end
+        if target then
+            camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position)
+        end
     end
 end)
 
