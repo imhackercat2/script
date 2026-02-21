@@ -9,10 +9,11 @@ local UserInputService = game:GetService("UserInputService")
 _G.NekoFly = false
 _G.NekoSpeed = false
 _G.NekoAim = false
+_G.NekoHardLock = false -- 新增：硬鎖狀態
 _G.NekoESP = false
 
 local flySpeed = 85
-local walkSpeedAdd = 80 -- 已修改：速度改成 80
+local walkSpeedAdd = 80 
 
 -- ---------- [ 1. 拖動系統 ] ----------
 local function makeDraggable(frame)
@@ -41,7 +42,7 @@ miniBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0); miniBtn.Text = "🐱"; m
 Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(1, 0); makeDraggable(miniBtn)
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 250, 0, 320); mainFrame.Position = UDim2.new(0.5, -125, 0.5, -160)
+mainFrame.Size = UDim2.new(0, 250, 0, 360); mainFrame.Position = UDim2.new(0.5, -125, 0.5, -180)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25); Instance.new("UICorner", mainFrame)
 makeDraggable(mainFrame)
 
@@ -54,9 +55,8 @@ local function createTopBtn(txt, pos, color, cb)
 end
 createTopBtn("─", UDim2.new(1, -80, 0, 5), Color3.new(1,1,1), function() mainFrame.Visible = false; miniBtn.Visible = true end)
 createTopBtn("✕", UDim2.new(1, -40, 0, 5), Color3.new(1,0.3,0.3), function() 
-    _G.NekoFly = false; _G.NekoSpeed = false; _G.NekoAim = false; _G.NekoESP = false
-    task.wait(0.1)
-    screenGui:Destroy() 
+    _G.NekoFly = false; _G.NekoSpeed = false; _G.NekoAim = false; _G.NekoHardLock = false; _G.NekoESP = false
+    task.wait(0.1); screenGui:Destroy() 
 end)
 miniBtn.MouseButton1Click:Connect(function() miniBtn.Visible = false; mainFrame.Visible = true end)
 
@@ -71,55 +71,51 @@ local function addToggle(txt, varName)
 end
 addToggle("飛行 (強制覆蓋物理)", "NekoFly")
 addToggle("透視 (ESP 0.2s)", "NekoESP")
-addToggle("鎖頭 (Aimbot)", "NekoAim")
+addToggle("鎖頭 (僅限敵人)", "NekoAim")
+addToggle("硬鎖 (不分敵我)", "NekoHardLock") -- 新增切換按鈕
 addToggle("移速 (80)", "NekoSpeed")
 
--- ---------- [ 3. 核心邏輯 - 解決互斥 ] ----------
+-- ---------- [ 3. 核心邏輯 ] ----------
 RunService.Heartbeat:Connect(function()
     if not screenGui.Parent then return end
     local char = player.Character; local root = char and char:FindFirstChild("HumanoidRootPart"); local hum = char and char:FindFirstChild("Humanoid")
     if not root or not hum then return end
 
-    -- [ 飛行修復：使用 BodyVelocity 但加入狀態強制鎖定 ]
+    -- 飛行與移速邏輯 (繼承 v2.8)
     if _G.NekoFly then
         local v = root:FindFirstChild("NekoV") or Instance.new("BodyVelocity", root)
-        v.Name = "NekoV"
-        v.MaxForce = Vector3.new(9e9, 9e9, 9e9) -- 極限推力，防止掉落
-        hum.PlatformStand = true
-        
-        -- 核心：當飛行開啟時，忽略移速邏輯，改用飛行控制
+        v.Name = "NekoV"; v.MaxForce = Vector3.new(9e9, 9e9, 9e9); hum.PlatformStand = true
         if hum.MoveDirection.Magnitude > 0.1 then
             v.Velocity = (camera.CFrame.LookVector * flySpeed) + (hum.MoveDirection * flySpeed)
-        else
-            v.Velocity = Vector3.new(0, 0, 0)
-        end
+        else v.Velocity = Vector3.zero end
         root.RotVelocity = Vector3.zero
     else
         if root:FindFirstChild("NekoV") then root.NekoV:Destroy() end
         if hum.PlatformStand then hum.PlatformStand = false end
-        
-        -- [ 移速：僅在飛行關閉時運作，避免衝突 ]
         if _G.NekoSpeed and hum.MoveDirection.Magnitude > 0.1 then
             root.Velocity = Vector3.new(hum.MoveDirection.X * walkSpeedAdd, root.Velocity.Y, hum.MoveDirection.Z * walkSpeedAdd)
         end
     end
 
-    -- [ 鎖頭 ]
-    if _G.NekoAim then
-        local t = nil; local minD = math.huge
+    -- 鎖頭與硬鎖邏輯
+    if _G.NekoAim or _G.NekoHardLock then
+        local target = nil; local minD = math.huge
         for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player and p.Team ~= player.Team and p.Character and p.Character:FindFirstChild("Head") and p.Character.Humanoid.Health > 0 then
-                local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
-                if d < minD then minD = d; t = p.Character.Head end
+            if p ~= player and p.Character and p.Character:FindFirstChild("Head") and p.Character.Humanoid.Health > 0 then
+                -- 如果是普通鎖頭則檢查隊伍，如果是硬鎖則不檢查
+                if _G.NekoHardLock or (p.Team ~= player.Team) then
+                    local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
+                    if d < minD then minD = d; target = p.Character.Head end
+                end
             end
         end
-        if t then camera.CFrame = CFrame.new(camera.CFrame.Position, t.Position) end
+        if target then camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position) end
     end
 end)
 
 -- ---------- [ 4. ESP 系統 (0.2s 刷新) ] ----------
 task.spawn(function()
-    while task.wait(0.2) do -- 已修改：ESP 改成 0.2s 刷新
+    while task.wait(0.2) do
         if not screenGui.Parent then break end
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
@@ -128,16 +124,12 @@ task.spawn(function()
                     local bgui = head:FindFirstChild("NekoESP")
                     local high = p.Character:FindFirstChild("NekoHigh")
                     if _G.NekoESP then
-                        -- 文字標籤
                         if not bgui then
                             bgui = Instance.new("BillboardGui", head); bgui.Name = "NekoESP"
                             bgui.Size = UDim2.new(0, 60, 0, 25); bgui.AlwaysOnTop = true; bgui.StudsOffset = Vector3.new(0, 2, 0)
                             local tl = Instance.new("TextLabel", bgui); tl.Size = UDim2.new(1, 0, 1, 0); tl.BackgroundTransparency = 1; tl.TextColor3 = Color3.new(1,1,1); tl.Font = Enum.Font.GothamBold; tl.TextSize = 10; tl.TextStrokeTransparency = 0; tl.Parent = bgui
                         end
-                        local dist = math.floor((head.Position - camera.CFrame.Position).Magnitude)
-                        bgui.TextLabel.Text = p.Name .. "\n[" .. dist .. "m]"
-                        
-                        -- 人物高亮
+                        bgui.TextLabel.Text = p.Name .. "\n[" .. math.floor((head.Position - camera.CFrame.Position).Magnitude) .. "m]"
                         if not high then 
                             high = Instance.new("Highlight", p.Character); high.Name = "NekoHigh" 
                             high.OutlineTransparency = 0.5; high.FillTransparency = 0.5
