@@ -1,4 +1,4 @@
--- [[ NEKO HUB v2.8.0 - MOBILE RE-ENGINEERED ]]
+-- [[ NEKO HUB v2.8.1 - FORCE LOCK EDITION ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -34,7 +34,7 @@ end
 
 -- ---------- [ 2. UI 構建 ] ----------
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "Neko_V28"; screenGui.ResetOnSpawn = false
+screenGui.Name = "Neko_V281"; screenGui.ResetOnSpawn = false
 
 local miniBtn = Instance.new("TextButton", screenGui)
 miniBtn.Size = UDim2.new(0, 60, 0, 60); miniBtn.Position = UDim2.new(0, 20, 0.5, 0)
@@ -47,7 +47,7 @@ mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25); Instance.new("UICorner"
 makeDraggable(mainFrame)
 
 local title = Instance.new("TextLabel", mainFrame)
-title.Text = "  NEKO HUB v2.8.0"; title.Size = UDim2.new(1, 0, 0, 45); title.TextColor3 = Color3.new(1, 1, 1); title.BackgroundTransparency = 1; title.Font = Enum.Font.GothamBold; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 10
+title.Text = "  NEKO HUB v2.8.1"; title.Size = UDim2.new(1, 0, 0, 45); title.TextColor3 = Color3.new(1, 1, 1); title.BackgroundTransparency = 1; title.Font = Enum.Font.GothamBold; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 10
 
 local function createTopBtn(txt, pos, color, cb)
     local b = Instance.new("TextButton", mainFrame)
@@ -72,16 +72,50 @@ end
 addToggle("飛行 (強制覆蓋物理)", "NekoFly")
 addToggle("透視 (ESP 0.2s)", "NekoESP")
 addToggle("鎖頭 (僅限敵人)", "NekoAim")
-addToggle("硬鎖 (不分敵我)", "NekoHardLock")
+addToggle("硬鎖 (場景全鎖)", "NekoHardLock")
 addToggle("移速 (80)", "NekoSpeed")
 
--- ---------- [ 3. 核心邏輯 - 解決互斥 ] ----------
+-- ---------- [ 3. 核心邏輯 ] ----------
+
+-- 鎖頭專用（使用 RenderStepped 確保最高優先級）
+RunService.RenderStepped:Connect(function()
+    if (_G.NekoAim or _G.NekoHardLock) and screenGui.Parent then
+        local target = nil
+        local minD = math.huge
+        
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                local head = p.Character:FindFirstChild("Head")
+                local phum = p.Character:FindFirstChild("Humanoid")
+                
+                if head and phum and phum.Health > 0 then
+                    -- 硬鎖直接判定，普通鎖頭檢查隊伍
+                    if _G.NekoHardLock or (p.Team ~= player.Team) then
+                        local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                        local dist = (head.Position - camera.CFrame.Position).Magnitude
+                        
+                        -- 鎖定最靠近準星或距離最近的人
+                        if dist < minD then
+                            minD = dist
+                            target = head
+                        end
+                    end
+                end
+            end
+        end
+        
+        if target then
+            camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position)
+        end
+    end
+end)
+
+-- 物理邏輯（飛行與移速）
 RunService.Heartbeat:Connect(function()
     if not screenGui.Parent then return end
     local char = player.Character; local root = char and char:FindFirstChild("HumanoidRootPart"); local hum = char and char:FindFirstChild("Humanoid")
     if not root or not hum then return end
 
-    -- [ 飛行修復 ]
     if _G.NekoFly then
         local v = root:FindFirstChild("NekoV") or Instance.new("BodyVelocity", root)
         v.Name = "NekoV"; v.MaxForce = Vector3.new(9e9, 9e9, 9e9); hum.PlatformStand = true
@@ -94,30 +128,6 @@ RunService.Heartbeat:Connect(function()
         if hum.PlatformStand then hum.PlatformStand = false end
         if _G.NekoSpeed and hum.MoveDirection.Magnitude > 0.1 then
             root.Velocity = Vector3.new(hum.MoveDirection.X * walkSpeedAdd, root.Velocity.Y, hum.MoveDirection.Z * walkSpeedAdd)
-        end
-    end
-
-    -- [ 鎖頭核心 - 恢復完整判定 ]
-    if _G.NekoAim or _G.NekoHardLock then
-        local target = nil; local minD = math.huge
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
-                local phum = p.Character:FindFirstChild("Humanoid")
-                if phum and phum.Health > 0 then
-                    local isEnemy = (p.Team ~= player.Team)
-                    -- 硬鎖優先於普通鎖頭判定
-                    if _G.NekoHardLock or (_G.NekoAim and isEnemy) then
-                        local d = (p.Character.Head.Position - camera.CFrame.Position).Magnitude
-                        if d < minD then
-                            minD = d
-                            target = p.Character.Head
-                        end
-                    end
-                end
-            end
-        end
-        if target then
-            camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position)
         end
     end
 end)
