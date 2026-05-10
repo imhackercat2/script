@@ -1,4 +1,4 @@
--- [[ NEKO HUB v2.8.1 - FORCE LOCK EDITION ]]
+-- [[ NEKO HUB v2.8.2 - FORCE LOCK EDITION ]]
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -13,7 +13,7 @@ _G.NekoHardLock = false
 _G.NekoESP = false
 
 local flySpeed = 85
-local walkSpeedAdd = 80 
+local walkSpeedAdd = 40 
 
 -- ---------- [ 1. 拖動系統 ] ----------
 local function makeDraggable(frame)
