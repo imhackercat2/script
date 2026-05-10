@@ -13,7 +13,7 @@ _G.NekoHardLock = false
 _G.NekoESP = false
 
 local flySpeed = 85
-local walkSpeedAdd = 10 
+local walkSpeedAdd = 15 
 
 -- ---------- [ 1. 拖動系統 ] ----------
 local function makeDraggable(frame)
